@@ -1,0 +1,213 @@
+name: Security Scanning Example
+
+# This example demonstrates the security scanning features
+# including npm audit and CodeQL static analysis
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-enabled:
+    # Call template with security scanning enabled
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-security-scan: 'true'
+      security-fail-on-error: 'false'  # Warning mode - doesn't block deployment
+
+---
+
+# Strict mode: Block on security vulnerabilities
+jobs:
+  security-strict:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-security-scan: 'true'
+      security-fail-on-error: 'true'  # Fail mode - blocks deployment if vulnerabilities found
+
+---
+
+# With additional configuration
+jobs:
+  security-full:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      # Core settings
+      package-manager: 'npm'
+      node-versions: '["20.x"]'
+
+      # Security scanning
+      enable-security-scan: 'true'
+      security-fail-on-error: 'false'
+
+      # Additional quality checks
+      enable-linting: 'true'
+      enable-coverage: 'true'
+      coverage-threshold: '80'
+
+---
+
+# Manual security audit workflow
+name: Manual Security Audit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: 'javascript'
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+      - name: Create issue for critical findings
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Critical security vulnerabilities found',
+              body: 'Review the Security tab for details',
+              labels: ['security', 'critical']
+            })
+
+---
+
+# Scheduled security scan (daily)
+name: Daily Security Scan
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 2 AM UTC daily
+
+jobs:
+  scheduled-scan:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-security-scan: 'true'
+      security-fail-on-error: 'false'
+      node-versions: '["20.x"]'
+
+---
+
+# Dependency update with security check
+name: Update Dependencies
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Update dependencies
+        run: npm update
+
+      - name: Run security scan
+        uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+        with:
+          enable-security-scan: 'true'
+          security-fail-on-error: 'true'
+
+      - name: Create PR if vulnerabilities fixed
+        if: success()
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: 'chore: update dependencies'
+          title: 'Update dependencies with security fixes'
+          body: 'Dependency update completed. All security scans passed.'
+          branch: 'deps/security-update'
+
+---
+
+# How security scanning works:
+
+# The security job includes:
+
+# 1. npm audit
+#    - Scans package.json and lock file
+#    - Checks against npm vulnerability database
+#    - Identifies: critical, high, moderate, low severity
+#    - Output: List of affected packages and fix recommendations
+
+# 2. CodeQL Analysis
+#    - Analyzes JavaScript source code
+#    - Detects: injection, path traversal, XSS, etc.
+#    - Results appear in GitHub Security tab
+#    - Can suppress false positives with comments
+
+# 3. SARIF Upload
+#    - Results uploaded in SARIF format
+#    - Visible in GitHub Security > Code scanning alerts
+#    - Can be integrated with other tools
+
+# Typical findings:
+
+# npm audit output:
+# ├─ critical (0)
+# ├─ high (2) - packages: lodash, express
+# ├─ moderate (5)
+# └─ low (1)
+
+# CodeQL findings:
+# ├─ Code injection (2)
+# ├─ Path traversal (1)
+# ├─ Insecure deserialization (0)
+# └─ XSS vulnerabilities (3)
+
+---
+
+# Custom notification on security findings:
+
+name: Security Scan with Notifications
+
+jobs:
+  security-scan:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-security-scan: 'true'
+      enable-notifications: 'true'
+
+  notify-security:
+    runs-on: ubuntu-latest
+    needs: security-scan
+    if: failure()
+    steps:
+      - name: Send security alert
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Security vulnerabilities found. Review at: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning"}'

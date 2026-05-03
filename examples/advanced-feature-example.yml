@@ -1,0 +1,341 @@
+name: Advanced Features Example
+
+# This example shows all advanced features working together:
+# - Artifact versioning with commit SHA
+# - Advanced caching strategies
+# - Concurrency control
+# - Notifications
+# - Release management
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  advanced-workflow:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      # Core
+      node-versions: '["18.x", "20.x", "22.x"]'
+      package-manager: 'npm'
+      working-directory: '.'
+
+      # Build & Test
+      build-command: 'npm run build'
+      test-command: 'npm test'
+      enable-coverage: 'true'
+      coverage-threshold: '80'
+
+      # Linting & Type checking
+      enable-linting: 'true'
+      enable-type-checking: 'true'
+
+      # Caching (Phase 9)
+      enable-cache: 'true'
+      cache-key-prefix: 'node-deps-v1'
+
+      # Artifacts with versioning (Phase 7)
+      enable-artifacts: 'true'
+      artifact-path: 'dist'
+      artifact-retention-days: '30'
+
+      # Concurrency control (Phase 6)
+      enable-concurrency: 'true'
+
+      # Release management (Phase 1-2)
+      enable-release: 'true'
+      release-branch: 'main'
+      git-user-name: 'Release Automation'
+      git-user-email: 'automation@example.com'
+
+      # Security scanning (Phase 3)
+      enable-security-scan: 'true'
+      security-fail-on-error: 'false'
+
+      # Multi-environment (Phase 4-5)
+      enable-deployment: 'true'
+      target-environment: 'dev'
+      deployment-command: 'npm run deploy:dev'
+
+      # Notifications (Phase 8)
+      enable-notifications: 'true'
+      notify-on-success: 'true'
+      notify-on-failure: 'true'
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    secrets:
+      git-token: ${{ secrets.GITHUB_TOKEN }}
+      npm-registry-token: ${{ secrets.NPM_TOKEN }}
+
+---
+
+# Artifact versioning workflow
+name: Build with Versioned Artifacts
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-versioned:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact-name: ${{ steps.version.outputs.artifact-name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate version
+        id: version
+        run: |
+          VERSION=$(cat package.json | grep '"version"' | head -1 | awk -F '"' '{print $4}')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          ARTIFACT_NAME="build-v${VERSION}-${SHORT_SHA}"
+          echo "version=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "artifact-name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Upload versioned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.artifact-name }}
+          path: dist/
+          retention-days: 30
+
+      - name: Create artifact metadata
+        run: |
+          cat > dist/METADATA.json << EOF
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "commit": "$(git rev-parse HEAD)",
+            "short_sha": "${{ steps.version.outputs.artifact-name }}",
+            "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+            "branch": "${{ github.ref_name }}",
+            "author": "${{ github.actor }}"
+          }
+          EOF
+
+  # Alternative: Use template's built-in artifact versioning
+  build-with-template:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-artifacts: 'true'
+      artifact-path: 'dist'
+      artifact-retention-days: '30'
+
+---
+
+# Advanced caching workflow
+name: Advanced Caching Example
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  monorepo-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+        package: [core, ui, api]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cache per package in monorepo
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: 'packages/${{ matrix.package }}/package-lock.json'
+
+      - name: Install dependencies for ${{ matrix.package }}
+        working-directory: packages/${{ matrix.package }}
+        run: npm ci
+
+      - name: Build ${{ matrix.package }}
+        working-directory: packages/${{ matrix.package }}
+        run: npm run build
+
+      - name: Test ${{ matrix.package }}
+        working-directory: packages/${{ matrix.package }}
+        run: npm test
+
+      # Cache build output
+      - name: Cache build output
+        uses: actions/cache@v3
+        with:
+          path: packages/${{ matrix.package }}/dist
+          key: build-${{ matrix.package }}-${{ hashFiles('packages/${{ matrix.package }}/src/**/*') }}
+          restore-keys: |
+            build-${{ matrix.package }}-
+
+---
+
+# Concurrency control example
+name: Concurrency Control
+
+on:
+  push:
+    branches: [main, feature/**, develop]
+  pull_request:
+
+# Cancel previous runs on same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-concurrency: 'true'
+
+---
+
+# Complete notification example
+name: Workflow with Rich Notifications
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  workflow:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-notifications: 'true'
+      notify-on-success: 'true'
+      notify-on-failure: 'true'
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Custom notification after job completion
+  notify:
+    runs-on: ubuntu-latest
+    needs: [workflow]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Determine status
+        id: status
+        run: |
+          if [ "${{ needs.workflow.result }}" = "success" ]; then
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "color=good" >> $GITHUB_OUTPUT
+            echo "status=Success" >> $GITHUB_OUTPUT
+          else
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "color=danger" >> $GITHUB_OUTPUT
+            echo "status=Failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send rich Slack notification
+        run: |
+          node scripts/slack-notifier.js success \
+            '{
+              "status": "success",
+              "title": "${{ steps.status.outputs.emoji }} Workflow ${{ steps.status.outputs.status }}",
+              "workflowName": "${{ github.workflow }}",
+              "runNumber": "${{ github.run_number }}",
+              "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "branch": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "author": "${{ github.actor }}",
+              "duration": "5m 30s",
+              "customFields": [
+                {"title": "Test Coverage", "value": "85%", "short": true},
+                {"title": "Build Size", "value": "2.4MB", "short": true},
+                {"title": "Dependencies", "value": "No vulnerabilities", "short": false}
+              ]
+            }'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+---
+
+# Release + Security + Notifications
+name: Secure Release Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-release: 'true'
+      release-branch: 'main'
+      enable-security-scan: 'true'
+      security-fail-on-error: 'true'
+      enable-notifications: 'true'
+      notify-on-success: 'true'
+      notify-on-failure: 'true'
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+    secrets:
+      git-token: ${{ secrets.GITHUB_TOKEN }}
+
+---
+
+# Performance tips:
+
+# 1. Cache Strategy for Large Projects:
+#    - Layer 1: package-lock.json → node_modules (fastest)
+#    - Layer 2: .npm directory (fallback)
+#    - Layer 3: dist/ output (only if deterministic)
+
+# 2. Artifact Versioning:
+#    - Include version number: v1.2.3
+#    - Include commit SHA: a1b2c3d
+#    - Pattern: build-v1.2.3-a1b2c3d
+#    - Keep artifacts for 30 days max
+
+# 3. Concurrency Control:
+#    - Group by workflow + branch
+#    - Cancel in-progress: true
+#    - Prevents resource waste
+#    - Speeds up feedback
+
+# 4. Notifications:
+#    - Send on failure always
+#    - Optional on success
+#    - Include rich metadata
+#    - Avoid notification fatigue
+
+# 5. Release Management:
+#    - Use conventional commits
+#    - Automatic version calculation
+#    - Create detailed changelogs
+#    - Tag releases for rollback
+
+---
+
+# Typical execution flow:
+
+# 1. Push to main
+# 2. Setup + Install (with cache)
+# 3. Lint + Test (parallel matrix)
+# 4. Security scan (parallel, non-blocking)
+# 5. Build + Create artifacts (versioned)
+# 6. Calculate release version
+# 7. Create Git tag
+# 8. Publish GitHub release
+# 9. Deploy to dev (automatic)
+# 10. Send notifications
+# Total time: 5-10 minutes with cache

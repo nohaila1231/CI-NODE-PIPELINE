@@ -1,0 +1,307 @@
+# Example: Complete CI/CD Workflow Using Node.js Template
+# 
+# This example demonstrates how to use the reusable node-template.yml workflow
+# in a real Node.js project with comprehensive CI/CD pipeline.
+#
+# Copy this to your project: .github/workflows/ci.yml
+# Then customize the parameters based on your project needs.
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  # Allow manual trigger
+  workflow_dispatch:
+
+env:
+  NODE_ENV: test
+
+jobs:
+  # ============================================================================
+  # EXAMPLE 1: Minimal Configuration
+  # ============================================================================
+  test-minimal:
+    name: Minimal Configuration
+    if: github.event_name == 'pull_request'
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      package-manager: npm
+
+  # ============================================================================
+  # EXAMPLE 2: Multi-Version Testing with Linting
+  # ============================================================================
+  test-multi-version:
+    name: Multi-Version Testing
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["18.x", "20.x", "22.x"]'
+      package-manager: npm
+      enable-linting: true
+      lint-command: npm run lint
+      fail-on-warnings: false
+
+  # ============================================================================
+  # EXAMPLE 3: Full Production Configuration with Coverage
+  # ============================================================================
+  test-with-coverage:
+    name: Comprehensive Testing
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      # Node versions to test
+      node-versions: '["18.x", "20.x", "22.x"]'
+      
+      # Package manager configuration
+      package-manager: npm
+      
+      # Build and test commands
+      build-command: npm run build
+      test-command: npm run test:unit
+      
+      # Code quality checks
+      enable-linting: true
+      lint-command: npm run lint
+      fail-on-warnings: true
+      
+      # Type checking for TypeScript projects
+      enable-type-checking: true
+      type-check-command: npm run type-check
+      
+      # Code coverage reporting
+      enable-coverage: true
+      coverage-command: npm run coverage
+      coverage-threshold: 80
+      
+      # Caching
+      enable-cache: true
+      cache-key-prefix: node-deps-main
+      
+      # Build artifacts
+      enable-artifacts: false
+      
+      # Error handling
+      continue-on-error: false
+
+  # ============================================================================
+  # EXAMPLE 4: Monorepo with Custom Working Directory
+  # ============================================================================
+  test-monorepo:
+    name: Monorepo - SDK Package
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      working-directory: packages/sdk
+      node-versions: '["20.x"]'
+      package-manager: pnpm
+      install-command: pnpm install --frozen-lockfile
+      build-command: pnpm run build
+      test-command: pnpm run test
+      lint-command: pnpm run lint
+      enable-linting: true
+      enable-coverage: true
+      coverage-threshold: 85
+
+  # ============================================================================
+  # EXAMPLE 5: Using Bun Package Manager
+  # ============================================================================
+  test-with-bun:
+    name: Testing with Bun
+    if: github.event_name == 'push'
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["22.x"]'
+      package-manager: bun
+      build-command: bun run build
+      test-command: bun test
+      lint-command: bun run lint
+      enable-linting: true
+      enable-cache: true
+
+  # ============================================================================
+  # EXAMPLE 6: Yarn Workspaces
+  # ============================================================================
+  test-yarn:
+    name: Yarn Workspaces
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["20.x"]'
+      package-manager: yarn
+      install-command: yarn install --frozen-lockfile
+      build-command: yarn workspaces run build
+      test-command: yarn workspaces run test
+
+  # ============================================================================
+  # EXAMPLE 7: With Pre/Post Hooks for Custom Setup
+  # ============================================================================
+  test-with-hooks:
+    name: Testing with Custom Hooks
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["20.x"]'
+      package-manager: npm
+      
+      # Pre-install: Could fetch secrets, setup environment, etc.
+      pre-install-script: |
+        echo "Setting up environment..."
+        echo "Node version check:"
+        node --version
+      
+      # Post-install: Could validate packages, run setup scripts, etc.
+      post-install-script: |
+        echo "Post-install verification..."
+        npm list --depth=0
+      
+      # Pre-build: Could generate code, validate config, etc.
+      pre-build-script: |
+        echo "Pre-build checks..."
+        test -f .env.example && echo "✓ Config template exists"
+      
+      # Post-build: Could verify output, run checks, etc.
+      post-build-script: |
+        echo "Post-build verification..."
+        test -d dist && echo "✓ Build output exists" || exit 1
+      
+      build-command: npm run build
+      test-command: npm test
+      enable-linting: true
+
+  # ============================================================================
+  # EXAMPLE 8: Artifact Uploading for Build Outputs
+  # ============================================================================
+  test-with-artifacts:
+    name: Testing with Artifacts
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["20.x"]'
+      package-manager: npm
+      build-command: npm run build
+      test-command: npm test
+      enable-artifacts: true
+      artifact-path: dist
+      artifact-retention-days: 30
+
+  # ============================================================================
+  # EXAMPLE 9: Publishing to NPM (On Release)
+  # ============================================================================
+  publish:
+    name: Publish to NPM
+    # Only publish on release events
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["20.x"]'
+      package-manager: npm
+      build-command: npm run build
+      test-command: npm run test
+      enable-coverage: true
+      coverage-threshold: 80
+      publish-to-npm: true
+      npm-registry: https://registry.npmjs.org/
+    secrets:
+      npm-registry-token: ${{ secrets.NPM_REGISTRY_TOKEN }}
+      npm-token: ${{ secrets.NPM_TOKEN }}
+
+  # ============================================================================
+  # EXAMPLE 10: Conditional Workflow - Only on Main Branch
+  # ============================================================================
+  test-main-branch:
+    name: Main Branch Full Suite
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["18.x", "20.x", "22.x"]'
+      package-manager: npm
+      enable-linting: true
+      enable-type-checking: true
+      enable-coverage: true
+      coverage-threshold: 90
+      fail-on-warnings: true
+      artifact-retention-days: 90
+
+  # ============================================================================
+  # EXAMPLE 11: Private Package Support
+  # ============================================================================
+  test-private-packages:
+    name: Testing with Private Packages
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["20.x"]'
+      package-manager: npm
+      build-command: npm run build
+      test-command: npm test
+    secrets:
+      npm-token: ${{ secrets.NPM_TOKEN }}
+
+  # ============================================================================
+  # EXAMPLE 12: Continue on Error (For Experimental Tests)
+  # ============================================================================
+  test-experimental:
+    name: Experimental Node Version
+    if: github.event_name == 'pull_request'
+    uses: <your-org>/<your-repo>/.github/workflows/node-template.yml@v1.0.0
+    with:
+      node-versions: '["23.x"]'  # Experimental/nightly version
+      package-manager: npm
+      continue-on-error: true  # Don't fail PR if this fails
+
+  # ============================================================================
+  # FINAL STATUS CHECK
+  # ============================================================================
+  ci-success:
+    name: CI Pipeline Success
+    runs-on: ubuntu-latest
+    needs:
+      - test-with-coverage
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          if [[ "${{ needs.test-with-coverage.result }}" == "success" ]]; then
+            echo "✅ All CI checks passed"
+            exit 0
+          else
+            echo "❌ CI checks failed"
+            exit 1
+          fi
+
+# ============================================================================
+# NOTES FOR CUSTOMIZATION
+# ============================================================================
+# 
+# 1. Replace <your-org>/<your-repo> with your actual GitHub repository path
+# 
+# 2. Adjust the 'on' trigger based on your needs:
+#    - Push: Which branches to trigger on
+#    - Pull Request: Which branches to check PRs against
+#    - Paths: Ignore docs-only changes with paths-ignore
+# 
+# 3. Choose the configuration that fits your project:
+#    - Minimal: Simple projects
+#    - Multi-version: Libraries/SDKs that must work with multiple Node versions
+#    - Full Coverage: Production projects requiring comprehensive testing
+#    - Monorepo: Projects with multiple packages
+# 
+# 4. Customize working-directory for monorepo structures
+# 
+# 5. Add secrets in GitHub Settings > Secrets and variables > Actions:
+#    - NPM_TOKEN: For installing private packages
+#    - NPM_REGISTRY_TOKEN: For publishing to npm
+# 
+# 6. Pin workflow versions to specific releases:
+#    - v1.0.0: Latest stable release
+#    - @main: Latest development version (not recommended for production)
+# 
+# 7. Test locally before relying on workflow:
+#    Run the same commands in your local environment
+#
+# ============================================================================
