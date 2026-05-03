@@ -51,7 +51,7 @@ GitHub-native email notifications (requires GitHub account).
 4. Click **Add to Slack**
 5. Select channel to receive notifications
 6. Click **Add Incoming Webhooks Integration**
-7. Copy the **Webhook URL** (looks like `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX`)
+
 
 ### Step 2: Add Webhook as Repository Secret
 
