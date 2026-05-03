@@ -1,0 +1,431 @@
+name: Node.js CI/CD Template
+
+on:
+  workflow_call:
+    inputs:
+      # Core configuration
+      node-versions:
+        description: 'JSON array of Node.js versions to test (e.g., ["18.x", "20.x", "22.x"])'
+        required: false
+        default: '["20.x"]'
+        type: string
+
+      working-directory:
+        description: 'Working directory for all commands'
+        required: false
+        default: '.'
+        type: string
+
+      package-manager:
+        description: 'Package manager to use (npm, yarn, pnpm, bun)'
+        required: false
+        default: 'npm'
+        type: string
+
+      # Build configuration
+      install-command:
+        description: 'Custom install command (overrides default based on package manager)'
+        required: false
+        default: ''
+        type: string
+
+      build-command:
+        description: 'Build command to run'
+        required: false
+        default: 'npm run build'
+        type: string
+
+      # Testing configuration
+      test-command:
+        description: 'Test command to run'
+        required: false
+        default: 'npm test'
+        type: string
+
+      enable-coverage:
+        description: 'Enable code coverage reporting'
+        required: false
+        default: 'false'
+        type: string
+
+      coverage-command:
+        description: 'Custom coverage command'
+        required: false
+        default: 'npm run coverage'
+        type: string
+
+      coverage-threshold:
+        description: 'Minimum coverage percentage required (0-100)'
+        required: false
+        default: '80'
+        type: string
+
+      # Linting & quality
+      enable-linting:
+        description: 'Enable linting checks'
+        required: false
+        default: 'true'
+        type: string
+
+      lint-command:
+        description: 'Lint command to run'
+        required: false
+        default: 'npm run lint'
+        type: string
+
+      enable-type-checking:
+        description: 'Enable TypeScript type checking'
+        required: false
+        default: 'false'
+        type: string
+
+      type-check-command:
+        description: 'Type check command to run'
+        required: false
+        default: 'npm run type-check'
+        type: string
+
+      # Caching
+      enable-cache:
+        description: 'Enable dependency caching'
+        required: false
+        default: 'true'
+        type: string
+
+      cache-key-prefix:
+        description: 'Prefix for cache keys'
+        required: false
+        default: 'node-deps'
+        type: string
+
+      # Artifacts
+      enable-artifacts:
+        description: 'Upload build artifacts'
+        required: false
+        default: 'false'
+        type: string
+
+      artifact-path:
+        description: 'Path to artifacts directory'
+        required: false
+        default: 'dist'
+        type: string
+
+      artifact-retention-days:
+        description: 'Number of days to retain artifacts'
+        required: false
+        default: '5'
+        type: string
+
+      # Pre/Post scripts
+      pre-install-script:
+        description: 'Script to run before install'
+        required: false
+        default: ''
+        type: string
+
+      post-install-script:
+        description: 'Script to run after install'
+        required: false
+        default: ''
+        type: string
+
+      pre-build-script:
+        description: 'Script to run before build'
+        required: false
+        default: ''
+        type: string
+
+      post-build-script:
+        description: 'Script to run after build'
+        required: false
+        default: ''
+        type: string
+
+      # Behavior controls
+      fail-on-warnings:
+        description: 'Treat linting warnings as errors'
+        required: false
+        default: 'false'
+        type: string
+
+      continue-on-error:
+        description: 'Continue workflow even if tests fail'
+        required: false
+        default: 'false'
+        type: string
+
+      # Publishing
+      publish-to-npm:
+        description: 'Publish to npm registry after successful test'
+        required: false
+        default: 'false'
+        type: string
+
+      npm-registry:
+        description: 'NPM registry URL'
+        required: false
+        default: 'https://registry.npmjs.org/'
+        type: string
+
+    secrets:
+      npm-token:
+        description: 'NPM authentication token for private packages'
+        required: false
+
+      npm-registry-token:
+        description: 'Token for publishing to npm'
+        required: false
+
+env:
+  # Disable CI environment flag to prevent unnecessary checks
+  CI: true
+
+jobs:
+  # Job: Validate inputs
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate node versions JSON
+        run: |
+          echo "Node versions: ${{ inputs.node-versions }}"
+          echo '${{ inputs.node-versions }}' | jq '.' > /dev/null || {
+            echo "❌ Invalid node-versions JSON: ${{ inputs.node-versions }}"
+            exit 1
+          }
+
+      - name: Validate package manager
+        run: |
+          case "${{ inputs.package-manager }}" in
+            npm|yarn|pnpm|bun) echo "✓ Valid package manager: ${{ inputs.package-manager }}" ;;
+            *) echo "❌ Invalid package manager: ${{ inputs.package-manager }}" && exit 1 ;;
+          esac
+
+      - name: Validate coverage threshold
+        run: |
+          THRESHOLD="${{ inputs.coverage-threshold }}"
+          if ! [[ "$THRESHOLD" =~ ^[0-9]+$ ]] || [ "$THRESHOLD" -lt 0 ] || [ "$THRESHOLD" -gt 100 ]; then
+            echo "❌ Coverage threshold must be 0-100, got: $THRESHOLD"
+            exit 1
+          fi
+          echo "✓ Coverage threshold valid: $THRESHOLD%"
+
+  # Job: Setup and test
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    needs: validate
+    continue-on-error: ${{ inputs.continue-on-error == 'true' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ${{ fromJson(inputs.node-versions) }}
+
+    steps:
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Pre-install script
+      - name: Run pre-install script
+        if: inputs.pre-install-script != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.pre-install-script }}
+
+      # Setup Node.js
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: ${{ inputs.npm-registry }}
+
+      # Setup package manager (pnpm, bun, yarn)
+      - name: Setup package manager
+        run: |
+          case "${{ inputs.package-manager }}" in
+            pnpm)
+              npm install -g pnpm
+              echo "Package manager: pnpm $(pnpm --version)"
+              ;;
+            bun)
+              npm install -g bun
+              echo "Package manager: bun $(bun --version)"
+              ;;
+            yarn)
+              npm install -g yarn
+              echo "Package manager: yarn $(yarn --version)"
+              ;;
+            npm)
+              echo "Package manager: npm $(npm --version)"
+              ;;
+          esac
+
+      # Configure cache
+      - name: Configure cache
+        if: inputs.enable-cache == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: ${{ inputs.package-manager == 'bun' && '' || inputs.package-manager }}
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      # Generate custom cache key for bun (not supported by setup-node)
+      - name: Generate bun cache key
+        if: inputs.enable-cache == 'true' && inputs.package-manager == 'bun'
+        id: bun-cache
+        run: |
+          CACHE_KEY="${{ inputs.cache-key-prefix }}-bun-${{ hashFiles(format('{0}/bun.lockb', inputs.working-directory)) }}"
+          echo "key=$CACHE_KEY" >> $GITHUB_OUTPUT
+
+      # Restore bun cache
+      - name: Restore bun cache
+        if: inputs.enable-cache == 'true' && inputs.package-manager == 'bun'
+        uses: actions/cache@v3
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.bun-cache.outputs.key }}
+          restore-keys: |
+            ${{ inputs.cache-key-prefix }}-bun-
+
+      # Install dependencies
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "${{ inputs.install-command }}" ]; then
+            echo "Running custom install command..."
+            ${{ inputs.install-command }}
+          else
+            case "${{ inputs.package-manager }}" in
+              pnpm) pnpm install --frozen-lockfile ;;
+              yarn) yarn install --frozen-lockfile ;;
+              bun) bun install --frozen-lockfile ;;
+              npm) npm ci ;;
+            esac
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+
+      # Post-install script
+      - name: Run post-install script
+        if: inputs.post-install-script != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.post-install-script }}
+
+      # Pre-build script
+      - name: Run pre-build script
+        if: inputs.pre-build-script != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.pre-build-script }}
+
+      # Linting
+      - name: Run linting
+        if: inputs.enable-linting == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        continue-on-error: ${{ inputs.fail-on-warnings != 'true' }}
+        run: ${{ inputs.lint-command }}
+
+      # Type checking
+      - name: Run type checking
+        if: inputs.enable-type-checking == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.type-check-command }}
+
+      # Build
+      - name: Build project
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.build-command }}
+
+      # Post-build script
+      - name: Run post-build script
+        if: inputs.post-build-script != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.post-build-script }}
+
+      # Test
+      - name: Run tests
+        working-directory: ${{ inputs.working-directory }}
+        continue-on-error: ${{ inputs.continue-on-error == 'true' }}
+        run: ${{ inputs.test-command }}
+
+      # Coverage
+      - name: Generate coverage report
+        if: inputs.enable-coverage == 'true'
+        working-directory: ${{ inputs.working-directory }}
+        continue-on-error: true
+        run: ${{ inputs.coverage-command }}
+
+      # Upload coverage
+      - name: Upload coverage to Codecov
+        if: inputs.enable-coverage == 'true'
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/coverage-final.json
+          flags: node-${{ matrix.node-version }}
+          fail_ci_if_error: false
+
+      # Upload artifacts
+      - name: Upload artifacts
+        if: inputs.enable-artifacts == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.node-version }}
+          path: ${{ inputs.working-directory }}/${{ inputs.artifact-path }}
+          retention-days: ${{ inputs.artifact-retention-days }}
+
+  # Job: Publish to npm (optional)
+  publish:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: test
+    if: inputs.publish-to-npm == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: ${{ inputs.npm-registry }}
+
+      - name: Setup package manager
+        run: |
+          case "${{ inputs.package-manager }}" in
+            pnpm)
+              npm install -g pnpm
+              ;;
+            bun)
+              npm install -g bun
+              ;;
+            yarn)
+              npm install -g yarn
+              ;;
+          esac
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "${{ inputs.install-command }}" ]; then
+            ${{ inputs.install-command }}
+          else
+            case "${{ inputs.package-manager }}" in
+              pnpm) pnpm install --frozen-lockfile ;;
+              yarn) yarn install --frozen-lockfile ;;
+              bun) bun install --frozen-lockfile ;;
+              npm) npm ci ;;
+            esac
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
+
+      - name: Build project
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.build-command }}
+
+      - name: Publish to npm
+        working-directory: ${{ inputs.working-directory }}
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm-registry-token }}
