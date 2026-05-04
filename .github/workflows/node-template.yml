@@ -587,12 +587,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
+      - name: Copy scripts from template
+        run: |
+          mkdir -p scripts
+          cp -r ${{ github.action_path }}/scripts/* scripts/
+          ls -la scripts/
 
       - name: Calculate semantic version
         id: semver
-        working-directory: ${{ inputs.working-directory }}
         run: |
-          node "${{ github.action_path }}/scripts/semantic-version.js"
+          node scripts/semantic-version.js
 
       - name: Configure Git
         run: |
