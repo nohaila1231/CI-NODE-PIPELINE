@@ -589,7 +589,7 @@ jobs:
         id: semver
         working-directory: ./user-project
         run: |
-          node scripts/semantic-version.js
+          node scripts/semantic-version.cjs
 
       # 6. Configurer Git
       - name: Configure Git
