@@ -1,0 +1,150 @@
+name: Release Management Example
+
+# This example shows how to use the template with automated release management
+# Semantic versioning is calculated from conventional commits
+# On successful tests, a git tag is created and a GitHub release is published
+
+on:
+  workflow_dispatch:
+
+jobs:
+  call-template:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      # Core configuration
+      node-versions: '["18.x", "20.x"]'
+      package-manager: 'npm'
+
+      # Build & test configuration
+      build-command: 'npm run build'
+      test-command: 'npm test'
+      enable-coverage: 'true'
+      coverage-threshold: '80'
+
+      # Linting
+      enable-linting: 'true'
+      enable-type-checking: 'false'
+
+      # Release management (Phase 1)
+      enable-release: 'true'
+      release-branch: 'main'
+      git-user-name: 'Release Bot'
+      git-user-email: 'release@example.com'
+
+      # Optional: Security scanning
+      enable-security-scan: 'true'
+      security-fail-on-error: 'false'
+
+      # Optional: Artifacts
+      enable-artifacts: 'true'
+      artifact-path: 'dist'
+      artifact-retention-days: '30'
+
+      # Optional: Concurrency
+      enable-concurrency: 'true'
+
+    secrets:
+      git-token: ${{ secrets.GITHUB_TOKEN }}
+      npm-registry-token: ${{ secrets.NPM_TOKEN }}
+
+---
+
+# Alternative: Call template with minimal release setup
+jobs:
+  release-minimal:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-release: 'true'
+      release-branch: 'main'
+    secrets:
+      git-token: ${{ secrets.GITHUB_TOKEN }}
+
+---
+
+# Alternative: Release with security enforcement
+jobs:
+  release-secure:
+    uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+    with:
+      enable-release: 'true'
+      release-branch: 'main'
+      enable-security-scan: 'true'
+      security-fail-on-error: 'true'  # Block release if security issues found
+    secrets:
+      git-token: ${{ secrets.GITHUB_TOKEN }}
+
+---
+
+# How the release workflow works:
+
+# 1. Commit messages determine version bump:
+#    - "feat: new feature" → minor version bump (v1.2.0 → v1.3.0)
+#    - "fix: bug fix" → patch version bump (v1.2.0 → v1.2.1)
+#    - "breaking: removal" → major version bump (v1.2.0 → v2.0.0)
+#    - "chore: cleanup" → no version bump
+
+# 2. After successful tests:
+#    - Semantic version calculated from git commits
+#    - CHANGELOG.md generated/updated
+#    - Git tag created (v1.2.3)
+#    - GitHub Release published
+
+# 3. Release includes:
+#    - Version tag with format: v{major}.{minor}.{patch}
+#    - GitHub Release with changelog
+#    - Build artifacts (if enabled)
+#    - Commit metadata
+
+# Example commits that trigger release:
+
+# On main branch with commits:
+# - feat: add user authentication
+# - fix: memory leak in cache
+# - chore: update dependencies
+#
+# Result:
+# - Current version: v1.0.0
+# - New version: v1.1.0 (minor bump from feat)
+# - Tag created: v1.1.0
+# - Changelog updated with commits since last tag
+
+---
+
+# Manual workflow trigger example:
+
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: 'Type of release'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Call template with release enabled
+        uses: your-org/node-ci-template/.github/workflows/node-template.yml@main
+        with:
+          enable-release: 'true'
+          release-branch: 'main'
+        secrets:
+          git-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manual release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Release type selected: ${{ github.event.inputs.release-type }}"
+          # Custom release logic here
