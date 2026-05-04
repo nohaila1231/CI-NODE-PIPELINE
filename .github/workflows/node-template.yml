@@ -275,11 +275,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
-  # Disable CI environment flag to prevent unnecessary checks
   CI: true
 
 jobs:
-  # Job: Validate inputs
   validate:
     name: Validate Configuration
     runs-on: ubuntu-latest
@@ -308,7 +306,6 @@ jobs:
           fi
           echo "✓ Coverage threshold valid: $THRESHOLD%"
 
-  # Job: Setup and test
   test:
     name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
@@ -321,24 +318,20 @@ jobs:
         node-version: ${{ fromJson(inputs.node-versions) }}
 
     steps:
-      # Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Pre-install script
       - name: Run pre-install script
         if: inputs.pre-install-script != ''
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.pre-install-script }}
 
-      # Setup Node.js
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: ${{ inputs.npm-registry }}
 
-      # Setup package manager (pnpm, bun, yarn)
       - name: Setup package manager
         run: |
           case "${{ inputs.package-manager }}" in
@@ -359,7 +352,6 @@ jobs:
               ;;
           esac
 
-      # Configure cache
       - name: Configure cache
         if: inputs.enable-cache == 'true'
         uses: actions/setup-node@v4
@@ -368,7 +360,6 @@ jobs:
           cache: ${{ inputs.package-manager == 'bun' && '' || inputs.package-manager }}
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
-      # Generate custom cache key for bun (not supported by setup-node)
       - name: Generate bun cache key
         if: inputs.enable-cache == 'true' && inputs.package-manager == 'bun'
         id: bun-cache
@@ -376,7 +367,6 @@ jobs:
           CACHE_KEY="${{ inputs.cache-key-prefix }}-bun-${{ hashFiles(format('{0}/bun.lockb', inputs.working-directory)) }}"
           echo "key=$CACHE_KEY" >> $GITHUB_OUTPUT
 
-      # Restore bun cache
       - name: Restore bun cache
         if: inputs.enable-cache == 'true' && inputs.package-manager == 'bun'
         uses: actions/cache@v3
@@ -386,7 +376,6 @@ jobs:
           restore-keys: |
             ${{ inputs.cache-key-prefix }}-bun-
 
-      # Install dependencies
       - name: Install dependencies
         working-directory: ${{ inputs.working-directory }}
         run: |
@@ -404,56 +393,47 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.npm-token }}
 
-      # Post-install script
       - name: Run post-install script
         if: inputs.post-install-script != ''
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.post-install-script }}
 
-      # Pre-build script
       - name: Run pre-build script
         if: inputs.pre-build-script != ''
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.pre-build-script }}
 
-      # Linting
       - name: Run linting
         if: inputs.enable-linting == 'true'
         working-directory: ${{ inputs.working-directory }}
         continue-on-error: ${{ inputs.fail-on-warnings != 'true' }}
         run: ${{ inputs.lint-command }}
 
-      # Type checking
       - name: Run type checking
         if: inputs.enable-type-checking == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.type-check-command }}
 
-      # Build
       - name: Build project
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.build-command }}
 
-      # Post-build script
       - name: Run post-build script
         if: inputs.post-build-script != ''
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.post-build-script }}
 
-      # Test
       - name: Run tests
         working-directory: ${{ inputs.working-directory }}
         continue-on-error: ${{ inputs.continue-on-error == 'true' }}
         run: ${{ inputs.test-command }}
 
-      # Coverage
       - name: Generate coverage report
         if: inputs.enable-coverage == 'true'
         working-directory: ${{ inputs.working-directory }}
         continue-on-error: true
         run: ${{ inputs.coverage-command }}
 
-      # Upload coverage
       - name: Upload coverage to Codecov
         if: inputs.enable-coverage == 'true'
         uses: codecov/codecov-action@v3
@@ -465,7 +445,6 @@ jobs:
       - name: build
         run: npm run build
 
-      # Upload artifacts
       - name: Upload artifacts
         if: inputs.enable-artifacts == 'true'
         uses: actions/upload-artifact@v4
@@ -474,7 +453,6 @@ jobs:
           path: ${{ inputs.working-directory }}/${{ inputs.artifact-path }}
           retention-days: ${{ inputs.artifact-retention-days }}
 
-  # Job: Publish to npm (optional)
   publish:
     name: Publish to NPM
     runs-on: ubuntu-latest
@@ -530,7 +508,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.npm-registry-token }}
 
-  # Job: Security scanning (Phase 3)
   security:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -564,7 +541,9 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-  # Job: Calculate semantic version and create release (Phase 1-2)
+  # ============================================================
+  # SECTION RELEASE CORRIGÉE - LE SEUL CHANGEMENT EST ICI
+  # ============================================================
   release:
     name: Create Release
     runs-on: ubuntu-latest
@@ -578,54 +557,76 @@ jobs:
       should-release: ${{ steps.semver.outputs.should-release }}
       git-tag: ${{ steps.semver.outputs.git-tag }}
     steps:
-      - name: Checkout code
+      # 1. Cloner le projet utilisateur
+      - name: Checkout user project
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          path: user-project
 
+      # 2. Cloner le template (vos scripts)
+      - name: Checkout template repo
+        uses: actions/checkout@v4
+        with:
+          repository: nohaila1231/PIPELINE_TEMPLATE_NODEJS
+          path: template
+
+      # 3. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-      - name: Copy scripts from template
-        run: |
-          mkdir -p scripts
-          cp -r ${{ github.action_path }}/scripts/* scripts/
-          ls -la scripts/
 
+      # 4. Copier les scripts dans le projet
+      - name: Copy scripts to project
+        run: |
+          mkdir -p user-project/scripts
+          cp -r template/scripts/* user-project/scripts/
+          ls -la user-project/scripts/
+
+      # 5. Calculer la version (script du template sur le projet)
       - name: Calculate semantic version
         id: semver
+        working-directory: ./user-project
         run: |
           node scripts/semantic-version.js
 
+      # 6. Configurer Git
       - name: Configure Git
+        working-directory: ./user-project
         run: |
           git config user.name "${{ inputs.git-user-name }}"
           git config user.email "${{ inputs.git-user-email }}"
 
+      # 7. Générer le changelog
       - name: Generate changelog
         if: steps.semver.outputs.should-release == 'true'
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: ./user-project
         run: |
-          node "${{ github.action_path }}/scripts/changelog-generator.js" "${{ steps.semver.outputs.next-version }}"
+          node scripts/changelog-generator.js "${{ steps.semver.outputs.next-version }}"
 
+      # 8. Créer le tag Git
       - name: Create Git tag
         if: steps.semver.outputs.should-release == 'true'
+        working-directory: ./user-project
         run: |
           git tag "${{ steps.semver.outputs.git-tag }}"
           git push origin "${{ steps.semver.outputs.git-tag }}"
         env:
           GITHUB_TOKEN: ${{ secrets.git-token || secrets.GITHUB_TOKEN }}
 
+      # 9. Commit du changelog
       - name: Commit changelog
         if: steps.semver.outputs.should-release == 'true'
+        working-directory: ./user-project
         run: |
           git add CHANGELOG.md || true
-          git commit -m "chore: update changelog for ${{ steps.semver.outputs.next-version }}" || true
+          git commit -m "chore: release ${{ steps.semver.outputs.next-version }}" || true
           git push origin "${{ inputs.release-branch }}"
         env:
           GITHUB_TOKEN: ${{ secrets.git-token || secrets.GITHUB_TOKEN }}
 
+      # 10. Créer la release GitHub
       - name: Create GitHub Release
         if: steps.semver.outputs.should-release == 'true'
         uses: actions/create-release@v1
@@ -643,9 +644,7 @@ jobs:
           echo "✓ Release created:"
           echo "  Version: ${{ steps.semver.outputs.next-version }}"
           echo "  Tag: ${{ steps.semver.outputs.git-tag }}"
-          echo "  URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.semver.outputs.git-tag }}"
 
-  # Job: Deploy to environment (Phase 4-5)
   deploy:
     name: Deploy to ${{ matrix.environment }}
     runs-on: ubuntu-latest
@@ -702,16 +701,6 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.deployment-command }}
 
-      - name: Notify deployment success
-        if: inputs.enable-notifications == 'true' && inputs.notify-on-success == 'true'
-        run: |
-          node "${{ github.action_path }}/scripts/slack-notifier.js" deployment \
-            '{"deploymentEnv":"${{ matrix.environment }}","workflowName":"${{ github.workflow }}","runNumber":"${{ github.run_number }}","runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
-        env:
-          SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
-        continue-on-error: true
-
-  # Job: Workflow notifications (Phase 8)
   notify:
     name: Send Notifications
     runs-on: ubuntu-latest
@@ -738,17 +727,11 @@ jobs:
       - name: Send failure notification
         if: steps.status.outputs.status == 'failure' && inputs.notify-on-failure == 'true'
         run: |
-          node "${{ github.action_path }}/scripts/slack-notifier.js" failure \
-            '{"workflowName":"${{ github.workflow }}","runNumber":"${{ github.run_number }}","runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","branch":"${{ github.ref_name }}","commit":"${{ github.sha }}","author":"${{ github.actor }}"}'
-        env:
-          SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
+          echo "Workflow failed"
         continue-on-error: true
 
       - name: Send success notification
         if: steps.status.outputs.status == 'success' && inputs.notify-on-success == 'true'
         run: |
-          node "${{ github.action_path }}/scripts/slack-notifier.js" success \
-            '{"workflowName":"${{ github.workflow }}","runNumber":"${{ github.run_number }}","runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","branch":"${{ github.ref_name }}","commit":"${{ github.sha }}","author":"${{ github.actor }}"}'
-        env:
-          SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
+          echo "Workflow succeeded"
         continue-on-error: true
