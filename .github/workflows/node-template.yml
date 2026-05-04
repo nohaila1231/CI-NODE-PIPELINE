@@ -269,6 +269,10 @@ on:
       git-token:
         description: 'GitHub token for creating releases and tags'
         required: false
+        
+permissions:
+  contents: write
+  packages: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -611,7 +615,8 @@ jobs:
         working-directory: ./user-project
         run: |
           git tag "${{ steps.semver.outputs.git-tag }}"
-          git push origin "${{ steps.semver.outputs.git-tag }}"
+          git push https://x-access-token:${{ secrets.git-token }}@github.com/nohaila1231/nodes_project.git "${{ steps.semver.outputs.git-tag }}"
+          
         env:
           GITHUB_TOKEN: ${{ secrets.git-token || secrets.GITHUB_TOKEN }}
 
@@ -622,7 +627,7 @@ jobs:
         run: |
           git add CHANGELOG.md || true
           git commit -m "chore: release ${{ steps.semver.outputs.next-version }}" || true
-          git push origin "${{ inputs.release-branch }}"
+          git push https://x-access-token:${{ secrets.git-token }}@github.com/nohaila1231/nodes_project.git "${{ inputs.release-branch }}"
         env:
           GITHUB_TOKEN: ${{ secrets.git-token || secrets.GITHUB_TOKEN }}
 
