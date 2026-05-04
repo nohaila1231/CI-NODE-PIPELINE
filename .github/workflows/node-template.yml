@@ -568,7 +568,7 @@ jobs:
       - name: Checkout template repo
         uses: actions/checkout@v4
         with:
-          repository: nohaila1231/PIPELINE_TEMPLATE_NODEJS
+          repository: nohaila1231/CI-NODE-PIPELINE
           path: template
 
       # 3. Setup Node.js
