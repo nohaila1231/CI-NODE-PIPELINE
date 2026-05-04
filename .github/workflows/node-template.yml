@@ -592,7 +592,7 @@ jobs:
         id: semver
         working-directory: ${{ inputs.working-directory }}
         run: |
-          node "${{ github.workspace }}/scripts/semantic-version.js"
+          node "${{ github.action_path }}/scripts/semantic-version.js"
 
       - name: Configure Git
         run: |
@@ -603,7 +603,7 @@ jobs:
         if: steps.semver.outputs.should-release == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: |
-          node "${{ github.workspace }}/scripts/changelog-generator.js" "${{ steps.semver.outputs.next-version }}"
+          node "${{ github.action_path }}/scripts/changelog-generator.js" "${{ steps.semver.outputs.next-version }}"
 
       - name: Create Git tag
         if: steps.semver.outputs.should-release == 'true'
@@ -701,7 +701,7 @@ jobs:
       - name: Notify deployment success
         if: inputs.enable-notifications == 'true' && inputs.notify-on-success == 'true'
         run: |
-          node "${{ github.workspace }}/scripts/slack-notifier.js" deployment \
+          node "${{ github.action_path }}/scripts/slack-notifier.js" deployment \
             '{"deploymentEnv":"${{ matrix.environment }}","workflowName":"${{ github.workflow }}","runNumber":"${{ github.run_number }}","runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
         env:
           SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
@@ -734,7 +734,7 @@ jobs:
       - name: Send failure notification
         if: steps.status.outputs.status == 'failure' && inputs.notify-on-failure == 'true'
         run: |
-          node "${{ github.workspace }}/scripts/slack-notifier.js" failure \
+          node "${{ github.action_path }}/scripts/slack-notifier.js" failure \
             '{"workflowName":"${{ github.workflow }}","runNumber":"${{ github.run_number }}","runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","branch":"${{ github.ref_name }}","commit":"${{ github.sha }}","author":"${{ github.actor }}"}'
         env:
           SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
@@ -743,7 +743,7 @@ jobs:
       - name: Send success notification
         if: steps.status.outputs.status == 'success' && inputs.notify-on-success == 'true'
         run: |
-          node "${{ github.workspace }}/scripts/slack-notifier.js" success \
+          node "${{ github.action_path }}/scripts/slack-notifier.js" success \
             '{"workflowName":"${{ github.workflow }}","runNumber":"${{ github.run_number }}","runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","branch":"${{ github.ref_name }}","commit":"${{ github.sha }}","author":"${{ github.actor }}"}'
         env:
           SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
