@@ -206,7 +206,7 @@ on:
         default: 'false'
         type: string
 
-      # Multi-Environment Support (Phase 4)
+      # Multi-Environment Support (Phase :  4)
       enable-deployment:
         description: 'Enable deployment jobs'
         required: false

@@ -17,7 +17,7 @@ const { execSync } = require('child_process');
 
 // Configuration
 const COMMIT_PATTERNS = {
-  BREAKING: /^(feat|fix|refactor)(\(.+\))?!:/,
+  BREAKING: /^(feat|fix|refactor)(\(.+\))?!:|^BREAKING CHANGE:/,  
   FEATURE: /^feat(\(.+\))?:/,
   BUGFIX: /^fix(\(.+\))?:/,
   CHORE: /^chore(\(.+\))?:/,
