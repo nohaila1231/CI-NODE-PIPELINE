@@ -461,6 +461,9 @@ jobs:
           files: ./coverage/coverage-final.json
           flags: node-${{ matrix.node-version }}
           fail_ci_if_error: false
+     
+      - name: build
+        run: npm run build
 
       # Upload artifacts
       - name: Upload artifacts
@@ -551,15 +554,15 @@ jobs:
           node-version: '20.x'
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: 'javascript'
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v2
+        uses: github/codeql-action/autobuild@v3
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
 
   # Job: Calculate semantic version and create release (Phase 1-2)
   release:
