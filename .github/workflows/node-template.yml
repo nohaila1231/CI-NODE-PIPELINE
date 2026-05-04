@@ -603,7 +603,7 @@ jobs:
         if: steps.semver.outputs.should-release == 'true'
         working-directory: ./user-project
         run: |
-          node scripts/changelog-generator.js "${{ steps.semver.outputs.next-version }}"
+          node scripts/changelog-generator.cjs "${{ steps.semver.outputs.next-version }}"
 
       # 8. Créer le tag Git
       - name: Create Git tag
