@@ -518,6 +518,9 @@ jobs:
     needs: test
     if: inputs.enable-security-scan == 'true'
     continue-on-error: ${{ inputs.security-fail-on-error == 'false' }}
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
