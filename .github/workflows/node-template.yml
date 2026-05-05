@@ -273,6 +273,8 @@ on:
 permissions:
   contents: write
   packages: write
+  security-events: write
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -521,9 +523,12 @@ jobs:
     permissions:
       security-events: write
       contents: read
+      actions: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Run npm audit
         working-directory: ${{ inputs.working-directory }}
@@ -541,12 +546,16 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: 'javascript'
+          queries: security-extended
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        with:
+          upload: true
+          category: "/language:javascript"
 
   # ============================================================
   # SECTION RELEASE CORRIGÉE - LE SEUL CHANGEMENT EST ICI
