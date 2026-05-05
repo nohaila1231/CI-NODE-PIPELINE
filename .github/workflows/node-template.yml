@@ -553,6 +553,7 @@ jobs:
         with:
           upload: true
           category: "/language:javascript"
+          token: ${{ secrets.GITHUB_TOKEN  }}
 
   # ============================================================
   # SECTION RELEASE CORRIGÉE - LE SEUL CHANGEMENT EST ICI
